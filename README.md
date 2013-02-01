@@ -1,5 +1,4 @@
-
-# PaperclipGoogledrive
+# PaperclipGoogledrive [![Code Climate](https://codeclimate.com/badge.png)](https://codeclimate.com/github/evinsou/paperclip-googledrive)
 
 PaperclipGoogledrive is a gem that extends paperclip storage for Google Drive. Works with Rails 3.x.
 
