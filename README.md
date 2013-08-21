@@ -44,6 +44,8 @@ This can be a hash or path to a YAML file containing the keys listed in the exam
 
 Example `config/google_drive.yml`:
 ```erb
+application_name: MyApp
+application_version: 1.0.0
 client_id: <%= ENV["CLIENT_ID"] %>
 client_secret: <%= ENV["CLIENT_SECRET"] %>
 access_token: <%= ENV["ACCESS_TOKEN"] %>
