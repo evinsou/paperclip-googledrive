@@ -1,10 +1,10 @@
-
 require 'active_support/core_ext/hash/keys'
 require 'active_support/inflector/methods'
 require 'active_support/core_ext/object/blank'
 require 'yaml'
 require 'erb'
 require 'google/api_client'
+require 'net/http'
 
 module Paperclip
 
@@ -95,6 +95,24 @@ module Paperclip
         end
         @queued_for_delete = []
       end
+
+      def copy_to_local_file(style, local_dest_path)
+        client = google_api_client
+        drive = client.discovered_api('drive', 'v2')
+        searched_id = search_for_title(path(style))
+        metadata =metadata_by_id(searched_id)
+        uri = URI.parse(metadata['downloadUrl'])
+        Net::HTTP.start(uri.host, uri.port, use_ssl: true) do |http|
+          File.open(local_dest_path, "wb") do |file|
+            http.request_get(uri.request_uri, 'Authorization' => "Bearer #{client.authorization.access_token}") do |resp|
+              resp.read_body do |segment|
+                file.write(segment)
+              end
+            end
+          end
+        end
+        true
+      end
       #
       def google_api_client
         @google_api_client ||= begin
@@ -177,7 +195,7 @@ module Paperclip
           result = client.execute!(
             :api_method => drive.files.get,
             :parameters => {'fileId' => file_id,
-                            'fields' => 'title, id, webContentLink, labels/trashed' })
+                            'fields' => 'title, id, webContentLink, downloadUrl, labels/trashed' })
           result.data # data.class # => Hash
         end
       end
