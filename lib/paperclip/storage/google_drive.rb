@@ -49,8 +49,10 @@ module Paperclip
             #upload(style, file) #style file
             client = google_api_client
             drive = client.discovered_api('drive', 'v2')
-            oauth2 = client.discovered_api('oauth2', 'v2')
-            result = client.execute!(:api_method => oauth2.userinfo.get)
+            result = client.execute(
+              :api_method => drive.files.get,
+              :parameters => { 'fileId' => @google_drive_options[:public_folder_id],
+                              'fields' => '  id, title' })
             client.authorization.access_token = result.request.authorization.access_token
             client.authorization.refresh_token = result.request.authorization.refresh_token
             title, mime_type = title_for_file(style), "#{content_type}"
@@ -101,7 +103,8 @@ module Paperclip
         @google_api_client ||= begin
           assert_required_keys
         # Initialize the client & Google+ API
-          client = Google::APIClient.new
+          client = Google::APIClient.new(:application_name => 'ppc-gd', :application_version => PaperclipGoogleDrive::VERSION)
+#          client = Google::APIClient.new(:application_name => @google_drive_credentials[:application_name], :application_version => @google_drive_credentials[:application_version])
           client.authorization.client_id = @google_drive_credentials[:client_id]
           client.authorization.client_secret = @google_drive_credentials[:client_secret]
           client.authorization.access_token = @google_drive_credentials[:access_token]
@@ -132,9 +135,7 @@ module Paperclip
 
       def title_for_file(style)
         file_name = instance.instance_exec(style, &file_title)
-
         style_suffix = (style != default_style ? "_#{style}" : "")
-
         if original_extension.present? && file_name =~ /#{original_extension}$/
           file_name.sub(original_extension, "#{style_suffix}#{original_extension}")
         else
@@ -186,7 +187,8 @@ module Paperclip
         end
       end
 
-      def exists?(style)
+      def exists?(style = default_style)
+        return false if not present?
         result_id = search_for_title(path(style))
         if result_id.nil?
           false
