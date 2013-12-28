@@ -57,7 +57,7 @@ The `:google_drive_options` option
 
 This is a hash containing any of the following options:
  - `:path` – block, works similarly to Paperclip's `:path` option
- - `:folder_id`- id of folder that must be created in google drive and set public permessions on it
+ - `:public_folder_id`- id of folder that must be created in google drive and set public permessions on it
  - `:default_image` - an image in Public folder that used for attachemnts if attachement is not present
 
 The :path option should be a block that returns a path that the uploaded file should be saved to. The block yields the attachment style and is executed in the scope of the model instance. For example:
