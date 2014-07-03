@@ -18,7 +18,7 @@ Gem::Specification.new do |gem|
   gem.test_files    = `git ls-files -- {test,spec,features}/*`.split("\n")
 
   gem.require_paths = ["lib"]
-  gem.required_ruby_version = ">= 1.9.2"
+  gem.required_ruby_version = ">= 2.1.1"
   gem.license       = "MIT"
 
   gem.add_dependency "paperclip", "~> 4.1.1"
