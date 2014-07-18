@@ -18,10 +18,10 @@ Gem::Specification.new do |gem|
   gem.test_files    = `git ls-files -- {test,spec,features}/*`.split("\n")
 
   gem.require_paths = ["lib"]
-  gem.required_ruby_version = ">= 1.9.2"
+  gem.required_ruby_version = ">= 2.1.1"
   gem.license       = "MIT"
 
-  gem.add_dependency "paperclip", "~> 3.4"
+  gem.add_dependency "paperclip", "~> 4.1.1"
   gem.add_dependency 'google-api-client', "~> 0.5"
 
   gem.add_development_dependency "rake", ">= 0.9"
