@@ -1,4 +1,4 @@
-# PaperclipGoogledrive 
+# PaperclipGoogledrive
 [![Gem Version](https://badge.fury.io/rb/paperclip-googledrive.png)](http://badge.fury.io/rb/paperclip-googledrive)
 [![Code Climate](https://codeclimate.com/badge.png)](https://codeclimate.com/github/evinsou/paperclip-googledrive)
 
@@ -57,8 +57,8 @@ The `:google_drive_options` option
 
 This is a hash containing any of the following options:
  - `:path` – block, works similarly to Paperclip's `:path` option
- - `:public_folder_id`- id of folder that must be created in google drive and set public permessions on it
- - `:default_image` - an image in Public folder that used for attachemnts if attachement is not present
+ - `:public_folder_id`- id of folder that must be created in google drive and set public permissions on it
+ - `:default_image` - an image in Public folder that used for attachments if attachment is not present
 
 The :path option should be a block that returns a path that the uploaded file should be saved to. The block yields the attachment style and is executed in the scope of the model instance. For example:
 ```ruby
