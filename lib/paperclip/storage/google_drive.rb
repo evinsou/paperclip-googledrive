@@ -156,7 +156,7 @@ module Paperclip
       def search_for_title(title)
         parameters = {
                 'folderId' => find_public_folder,
-                'q' => "title contains '#{title}'", # full_title
+                'q' => "title = '#{title}'", # full_title
                 'fields' => 'items/id'}
         client = google_api_client
         drive = client.discovered_api('drive', 'v2')
