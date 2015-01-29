@@ -143,7 +143,7 @@ module Paperclip
         end
       end # full title
 
-      def public_url_for title
+      def public_url_for(title)
         searched_id = search_for_title(title) #return id if any or style
         if searched_id.nil? # it finds some file
           default_image
