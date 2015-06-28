@@ -91,7 +91,7 @@ module Paperclip
             result = client.execute(
               :api_method => drive.files.delete,
               :parameters => parameters)
-            if result.status != 200
+            if result.status != 204
               puts "An error occurred: #{result.data['error']['message']}"
             end
           end
