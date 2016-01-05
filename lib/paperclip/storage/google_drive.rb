@@ -65,7 +65,7 @@ module Paperclip
               metadata.parents = [{'id' => parent_id}]
             end
             media = Google::APIClient::UploadIO.new( file, mime_type)
-            result = client.execute(
+            result = client.execute!(
               :api_method => drive.files.insert,
               :body_object => metadata,
               :media => media,
@@ -88,12 +88,9 @@ module Paperclip
             folder_id = find_public_folder
             parameters = {'fileId' => file_id,
                           'folder_id' => folder_id }
-            result = client.execute(
+            result = client.execute!(
               :api_method => drive.files.delete,
               :parameters => parameters)
-            if result.status != 204
-              puts "An error occurred: #{result.data['error']['message']}"
-            end
           end
         end
         @queued_for_delete = []
@@ -160,16 +157,14 @@ module Paperclip
                 'fields' => 'items/id'}
         client = google_api_client
         drive = client.discovered_api('drive', 'v2')
-        result = client.execute(:api_method => drive.children.list,
+        result = client.execute!(:api_method => drive.children.list,
                           :parameters => parameters)
-        if result.status == 200
-          if result.data.items.length > 0
-            result.data.items[0]['id']
-          elsif result.data.items.length == 0
-            nil
-          else
-            nil
-          end
+        if result.data.items.length > 0
+          result.data.items[0]['id']
+        elsif result.data.items.length == 0
+          nil
+        else
+          nil
         end
       end # id or nil
 
@@ -177,13 +172,11 @@ module Paperclip
         if file_id.is_a? String
           client = google_api_client
           drive = client.discovered_api('drive', 'v2')
-          result = client.execute(
+          result = client.execute!(
             :api_method => drive.files.get,
             :parameters => {'fileId' => file_id,
                             'fields' => 'title, id, webContentLink, labels/trashed' })
-          if result.status == 200
-            result.data # data.class # => Hash
-          end
+          result.data # data.class # => Hash
         end
       end
 
