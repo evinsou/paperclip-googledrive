@@ -160,7 +160,7 @@ module Paperclip
         end
       end # full title
 
-      def public_url_for title
+      def public_url_for(title)
         searched_id = search_for_title(title) #return id if any or style
         if searched_id.nil? # it finds some file
           default_image
@@ -173,7 +173,7 @@ module Paperclip
       def search_for_title(title)
         parameters = {
                 'folderId' => find_public_folder,
-                'q' => "title contains '#{title}'", # full_title
+                'q' => "title = '#{title}'", # full_title
                 'fields' => 'items/id'}
         client = google_api_client
         drive = client.discovered_api('drive', 'v2')
