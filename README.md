@@ -2,8 +2,7 @@
 [![Gem Version](https://badge.fury.io/rb/paperclip-googledrive.png)](http://badge.fury.io/rb/paperclip-googledrive)
 [![Code Climate](https://codeclimate.com/badge.png)](https://codeclimate.com/github/evinsou/paperclip-googledrive)
 
-This gem currently is not supported, because of changes in google-api-ruby-client. 
-There is working alternative for google-api-ruby-client with 0.8.0 version.
+This gem currently is supporting google-api-ruby-client (~> 0.11).
 
 PaperclipGoogledrive is a gem that extends paperclip storage for Google Drive. Works with Rails 3.x.
 
@@ -31,13 +30,13 @@ Google Drive is a free service for file storage files. In order to use this stor
 
 3. Go to "APIs & Auth > Credentials" and create a new OAuth 2.0 Client ID; select "web application" type, specify `http://localhost` for application home page.
 
-4. Now you will have a Client ID, Client Secret, and Redirect URL. 
+4. Now you will have a Client ID, Client Secret, and Redirect URL.
 
 5. Run the authorization task:
     ```
     $ rake google_drive:authorize
     ```
-    When you call this Rake task, it will ask you to provide the client id, client secret, redirect url and auth scope. Specify `https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/userinfo.profile` for scope ([more on Google Drive scopes](https://developers.google.com/drive/scopes)). 
+    When you call this Rake task, it will ask you to provide the client id, client secret, redirect url and auth scope. Specify `https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/userinfo.profile` for scope ([more on Google Drive scopes](https://developers.google.com/drive/scopes)).
 
 6. The Rake task will give you an auth url. Simply go to that url (while signed in as the designated uploads owner), authorize the app, then enter code from url in the console. The rake task will output valid ruby code which you can use to create a client, in particular, the access and refresh tokens.
 
