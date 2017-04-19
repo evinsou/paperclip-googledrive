@@ -47,11 +47,10 @@ module Paperclip
           if exists?(path(style))
             raise FileExists, "file \"#{path(style)}\" already exists in your Google Drive"
           else
-            client = google_api_client
             title, mime_type = title_for_file(style), "#{content_type}"
             parent_id = find_public_folder
             file_metadata = { name: title, parents: [parent_id] }
-            metadata = client.create_file(file_metadata,
+            metadata = google_api_client.create_file(file_metadata,
               upload_source: file.path,
               content_type: content_type)
           end
@@ -63,19 +62,15 @@ module Paperclip
       def flush_deletes
         @queued_for_delete.each do |path|
           Paperclip.log("delete #{path}")
-          client = google_api_client
           the_item = search_for_file(path)
-          if the_item
-            client.delete_file(the_item[:id])
-          end
+          google_api_client.delete_file(the_item[:id]) if the_item
         end
         @queued_for_delete = []
       end
 
       def copy_to_local_file(style, local_dest_path)
-        client = google_api_client
         the_item = search_for_file(path(style))
-        drive.get_file(the_item[:id], download_dest: local_dest_path)
+        google_api_client.get_file(the_item[:id], download_dest: local_dest_path)
         true
       end
       #
@@ -120,8 +115,7 @@ module Paperclip
       end # url
       # take name, search in given folder and if it finds a file, return id of a file or nil
       def search_for_file(name)
-        client = google_api_client
-        result = client.list_files(
+        result = google_api_client.list_files(
           q: "name contains '#{name}' and '#{find_public_folder}' in parents",
           corpora: 'user', fields: 'files(id, name, trashed, webContentLink)'
         )
