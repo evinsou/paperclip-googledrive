@@ -4,7 +4,7 @@ require 'active_support/core_ext/object/blank'
 require 'yaml'
 require 'erb'
 require 'googleauth'
-require 'google/apis/drive_v2'
+require 'google/apis/drive_v3'
 require 'net/http'
 
 module Paperclip
@@ -14,7 +14,7 @@ module Paperclip
       # * url return url to show on site with style options
       # * path(style) return title that used to insert file to store or find it in store
       # * public_url_for title  return url to file if find by title or url to default image if set
-      # * search_for_title(title) take title, search in given folder and if it finds a file, return id of a file or nil
+      # * search_for_file(name) take name, search in given folder and if it finds a file, return id of a file or nil
       # * metadata_by_id(file_i get file metadata from store, used to back url or find out value of trashed
       # * exists?(style)  check either exists file with title or not
       # * default_image  return url to default url if set in option
@@ -50,8 +50,8 @@ module Paperclip
             client = google_api_client
             title, mime_type = title_for_file(style), "#{content_type}"
             parent_id = find_public_folder
-            file_metadata = { title: title, parents: [{id: parent_id}] }
-            metadata = client.insert_file(file_metadata,
+            file_metadata = { name: title, parents: [parent_id] }
+            metadata = client.create_file(file_metadata,
               upload_source: file.path,
               content_type: content_type)
           end
@@ -64,7 +64,7 @@ module Paperclip
         @queued_for_delete.each do |path|
           Paperclip.log("delete #{path}")
           client = google_api_client
-          the_item = search_for_title(path)
+          the_item = search_for_file(path)
           if the_item
             client.delete_file(the_item[:id])
           end
@@ -74,14 +74,14 @@ module Paperclip
 
       def copy_to_local_file(style, local_dest_path)
         client = google_api_client
-        the_item = search_for_title(path(style))
+        the_item = search_for_file(path(style))
         drive.get_file(the_item[:id], download_dest: local_dest_path)
         true
       end
       #
       def google_api_client
         @google_api_client ||= begin
-          drive = Google::Apis::DriveV2::DriveService.new
+          drive = Google::Apis::DriveV3::DriveService.new
           drive.authorization = Google::Auth::ServiceAccountCredentials.make_creds(
             scope: SCOPE,
             json_key_io: StringIO.new(google_app_credentials)
@@ -115,21 +115,25 @@ module Paperclip
       end # full title
 
       def public_url_for title
-        the_item = search_for_title(title)
+        the_item = search_for_file(title)
         the_item ? the_item[:link] : default_image
       end # url
-      # take title, search in given folder and if it finds a file, return id of a file or nil
-      def search_for_title(title)
+      # take name, search in given folder and if it finds a file, return id of a file or nil
+      def search_for_file(name)
         client = google_api_client
-        result = client.list_files(q: "title contains '#{title}' and '#{find_public_folder}' in parents", corpora: 'default')
-        if result.items.length > 0
-          the_item = result.items.first
+        result = client.list_files(
+          q: "name contains '#{name}' and '#{find_public_folder}' in parents",
+          corpora: 'user', fields: 'files(id, name, trashed, webContentLink)'
+        )
+
+        if result.files.length > 0
+          file = result.files.first
           {
-            link: the_item.web_content_link.sub('download', 'view'),
-            id: the_item.id,
-            trashed: the_item.labels.trashed
+            link: file.web_content_link.sub('download', 'view'),
+            id: file.id,
+            trashed: file.trashed
           }
-        elsif result.items.length == 0
+        elsif result.files.length == 0
           nil
         else
           nil
@@ -138,7 +142,7 @@ module Paperclip
 
       def exists?(style = default_style)
         return false if not present?
-        result = search_for_title(path(style))
+        result = search_for_file(path(style))
         if result.nil?
           false
         else
