@@ -81,6 +81,11 @@ module Paperclip
             scope: SCOPE,
             json_key_io: StringIO.new(google_app_credentials)
           )
+          %w(open_timeout_sec read_timeout_sec send_timeout_sec).each do |timeout_type|
+            if seconds = @google_drive_options[timeout_type]
+              drive.client_options.public_send(:"#{timeout_type}=", seconds)
+            end
+          end
           drive
         end
       end
