@@ -3,7 +3,8 @@ require 'active_support/inflector/methods'
 require 'active_support/core_ext/object/blank'
 require 'yaml'
 require 'erb'
-require 'google/api_client'
+require 'googleauth'
+require 'google/apis/drive_v3'
 require 'net/http'
 
 module Paperclip
@@ -13,7 +14,7 @@ module Paperclip
       # * url return url to show on site with style options
       # * path(style) return title that used to insert file to store or find it in store
       # * public_url_for title  return url to file if find by title or url to default image if set
-      # * search_for_title(title) take title, search in given folder and if it finds a file, return id of a file or nil
+      # * search_for_file(name) take name, search in given folder and if it finds a file, return id of a file or nil
       # * metadata_by_id(file_i get file metadata from store, used to back url or find out value of trashed
       # * exists?(style)  check either exists file with title or not
       # * default_image  return url to default url if set in option
@@ -25,6 +26,7 @@ module Paperclip
       # * original_extension  return extension of file
 
     module GoogleDrive
+      SCOPE = "https://www.googleapis.com/auth/drive"
 
       def self.extended(base)
         begin
@@ -35,9 +37,8 @@ module Paperclip
         end unless defined?(Google)
 
         base.instance_eval do
-          @google_drive_credentials = parse_credentials(@options[:google_drive_credentials] || {})
           @google_drive_options = @options[:google_drive_options] || {}
-          google_api_client # Force validations of credentials
+          @google_drive_client
         end
       end
       #
@@ -46,32 +47,12 @@ module Paperclip
           if exists?(path(style))
             raise FileExists, "file \"#{path(style)}\" already exists in your Google Drive"
           else
-            #upload(style, file) #style file
-            client = google_api_client
-            drive = client.discovered_api('drive', 'v2')
-            result = client.execute(
-              :api_method => drive.files.get,
-              :parameters => { 'fileId' => @google_drive_options[:public_folder_id],
-                              'fields' => '  id, title' })
-            client.authorization.access_token = result.request.authorization.access_token
-            client.authorization.refresh_token = result.request.authorization.refresh_token
             title, mime_type = title_for_file(style), "#{content_type}"
-            parent_id = @google_drive_options[:public_folder_id] # folder_id for Public folder
-            metadata = drive.files.insert.request_schema.new({
-              'title' => title, #if it is no extension, that is a folder and another folder
-              'description' => 'paperclip file on google drive',
-              'mimeType' => mime_type })
-            if parent_id
-              metadata.parents = [{'id' => parent_id}]
-            end
-            media = Google::APIClient::UploadIO.new( file, mime_type)
-            result = client.execute!(
-              :api_method => drive.files.insert,
-              :body_object => metadata,
-              :media => media,
-              :parameters => {
-                'uploadType' => 'multipart',
-                'alt' => 'json' })
+            parent_id = find_public_folder
+            file_metadata = { name: title, parents: [parent_id] }
+            metadata = google_api_client.create_file(file_metadata,
+              upload_source: file.path,
+              content_type: content_type)
           end
         end
         after_flush_writes
@@ -81,59 +62,32 @@ module Paperclip
       def flush_deletes
         @queued_for_delete.each do |path|
           Paperclip.log("delete #{path}")
-          client = google_api_client
-          drive = client.discovered_api('drive', 'v2')
-          file_id = search_for_title(path)
-          unless file_id.nil?
-            folder_id = find_public_folder
-            parameters = {'fileId' => file_id,
-                          'folder_id' => folder_id }
-            result = client.execute!(
-              :api_method => drive.files.delete,
-              :parameters => parameters)
-          end
+          the_item = search_for_file(path)
+          google_api_client.delete_file(the_item[:id]) if the_item
         end
         @queued_for_delete = []
       end
 
       def copy_to_local_file(style, local_dest_path)
-        client = google_api_client
-        drive = client.discovered_api('drive', 'v2')
-        searched_id = search_for_title(path(style))
-        metadata =metadata_by_id(searched_id)
-        uri = URI.parse(metadata['downloadUrl'])
-        Net::HTTP.start(uri.host, uri.port, use_ssl: true) do |http|
-          File.open(local_dest_path, "wb") do |file|
-            http.request_get(uri.request_uri, 'Authorization' => "Bearer #{client.authorization.access_token}") do |resp|
-              resp.read_body do |segment|
-                file.write(segment)
-              end
-            end
-          end
-        end
+        the_item = search_for_file(path(style))
+        google_api_client.get_file(the_item[:id], download_dest: local_dest_path)
         true
       end
       #
       def google_api_client
         @google_api_client ||= begin
-          assert_required_keys
-        # Initialize the client & Google+ API
-          client = Google::APIClient.new(
-            application_name: @google_drive_credentials[:application_name] || 'ppc-gd',
-            application_version: @google_drive_credentials[:application_version] || PaperclipGoogleDrive::VERSION
+          drive = Google::Apis::DriveV3::DriveService.new
+          drive.authorization = Google::Auth::ServiceAccountCredentials.make_creds(
+            scope: SCOPE,
+            json_key_io: StringIO.new(google_app_credentials)
           )
-          client.authorization.client_id = @google_drive_credentials[:client_id]
-          client.authorization.client_secret = @google_drive_credentials[:client_secret]
-          client.authorization.access_token = @google_drive_credentials[:access_token]
-          client.authorization.refresh_token = @google_drive_credentials[:refresh_token]
-          client
+          %w(open_timeout_sec read_timeout_sec send_timeout_sec).each do |timeout_type|
+            if seconds = @google_drive_options[timeout_type]
+              drive.client_options.public_send(:"#{timeout_type}=", seconds)
+            end
+          end
+          drive
         end
-      end
-      #
-      def google_drive
-        client = google_api_client
-        drive = client.discovered_api('drive', 'v2')
-        drive
       end
 
       def url(*args)
@@ -161,65 +115,42 @@ module Paperclip
       end # full title
 
       def public_url_for title
-        searched_id = search_for_title(title) #return id if any or style
-        if searched_id.nil? # it finds some file
-          default_image
-        else
-          metadata = metadata_by_id(searched_id)
-          metadata['webContentLink']
-        end
+        the_item = search_for_file(title)
+        the_item ? the_item[:link] : default_image
       end # url
-      # take title, search in given folder and if it finds a file, return id of a file or nil
-      def search_for_title(title)
-        parameters = {
-                'folderId' => find_public_folder,
-                'q' => "title contains '#{title}'", # full_title
-                'fields' => 'items/id'}
-        client = google_api_client
-        drive = client.discovered_api('drive', 'v2')
-        result = client.execute!(:api_method => drive.children.list,
-                          :parameters => parameters)
-        if result.data.items.length > 0
-          result.data.items[0]['id']
-        elsif result.data.items.length == 0
+      # take name, search in given folder and if it finds a file, return id of a file or nil
+      def search_for_file(name)
+        result = google_api_client.list_files(
+          q: "name contains '#{name}' and '#{find_public_folder}' in parents",
+          corpora: 'user', fields: 'files(id, name, trashed, webContentLink)'
+        )
+
+        if result.files.length > 0
+          file = result.files.first
+          {
+            link: file.web_content_link.sub('download', 'view'),
+            id: file.id,
+            trashed: file.trashed
+          }
+        elsif result.files.length == 0
           nil
         else
           nil
         end
       end # id or nil
 
-      def metadata_by_id(file_id)
-        if file_id.is_a? String
-          client = google_api_client
-          drive = client.discovered_api('drive', 'v2')
-          result = client.execute!(
-            :api_method => drive.files.get,
-            :parameters => {'fileId' => file_id,
-                            'fields' => 'title, id, webContentLink, downloadUrl, labels/trashed' })
-          result.data # data.class # => Hash
-        end
-      end
-
       def exists?(style = default_style)
         return false if not present?
-        result_id = search_for_title(path(style))
-        if result_id.nil?
+        result = search_for_file(path(style))
+        if result.nil?
           false
         else
-          data_hash = metadata_by_id(result_id)
-          !data_hash['labels']['trashed'] # if trashed -> not exists
+          !result[:trashed]
         end
       end
 
       def default_image
-        if @google_drive_options[:default_url] #if default image is set
-          title = @google_drive_options[:default_url]
-          searched_id = search_for_title(title) # id
-          metadata = metadata_by_id(searched_id) unless searched_id.nil?
-          metadata['webContentLink']
-        else
-          'No picture' # ---- ?
-        end
+        @google_drive_options[:default_url] || "missing.png"
       end
 
       def find_public_folder
@@ -230,40 +161,22 @@ module Paperclip
       end
       class FileExists < ArgumentError
       end
+
       private
 
-        def file_title
-          return @google_drive_options[:path] if @google_drive_options[:path] #path: proc
-          eval %(proc { |style| "\#{id}_\#{#{name}.original_filename}"})
-        end
+      def google_app_credentials
+        @google_app_credentials ||= ENV["GOOGLE_APPLICATION_CREDENTIALS"]
+      end
 
-        def parse_credentials(credentials)
-          result =
-            case credentials
-            when File
-              YAML.load(ERB.new(File.read(credentials.path)).result)
-            when String, Pathname
-              YAML.load(ERB.new(File.read(credentials)).result)
-            when Hash
-              credentials
-            else
-              raise ArgumentError, ":google_drive_credentials are not a path, file, nor a hash"
-            end
-          result.symbolize_keys #or string keys
-        end
-        # check either all ccredentials keys is set
-        def assert_required_keys
-          keys_list = [:client_id, :client_secret, :access_token, :refresh_token]
-          keys_list.each do |key|
-            @google_drive_credentials.fetch(key)
-          end
-        end
-        # return extension of file
-        def original_extension
-          File.extname(original_filename)
-        end
+      def file_title
+        return @google_drive_options[:path] if @google_drive_options[:path] #path: proc
+        eval %(proc { |style| "\#{id}_\#{#{name}.original_filename}"})
+      end
+
+      # return extension of file
+      def original_extension
+        File.extname(original_filename)
+      end
     end
-
   end
-
 end
